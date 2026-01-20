@@ -47,10 +47,14 @@ export default function PostCard({ post, onOpen }) {
 
     const handleDelete = async () => {
         if (!window.confirm("Are you sure you want to delete this post?")) return;
+
+        console.log("Attempting to delete post:", post.id);
         try {
             await deleteDoc(doc(db, "posts", post.id));
+            console.log("Post deleted successfully");
         } catch (error) {
             console.error("Error deleting post:", error);
+            alert(`Failed to delete post: ${error.message}`);
         }
     };
 

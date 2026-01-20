@@ -6,7 +6,7 @@ import CreatePostModal from '../components/CreatePostModal';
 import ImageCropperModal from '../components/ImageCropperModal';
 import PostCard from '../components/PostCard';
 import { db } from '../firebase';
-import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 export default function Profile({ theme, toggleTheme }) {
     const { currentUser, logout } = useAuth();
@@ -63,6 +63,37 @@ export default function Profile({ theme, toggleTheme }) {
         return () => unsubscribe();
 
     }, [currentUser]);
+
+    // Migration Effect: Fix legacy news-reposts missing userId
+    useEffect(() => {
+        if (!currentUser?.uid || userPosts.length === 0) return;
+
+        const fixLegacyPosts = async () => {
+            const legacyPosts = userPosts.filter(p =>
+                p.type === 'news-repost' &&
+                !p.userId &&
+                p.user?.handle === currentUser.email
+            );
+
+            if (legacyPosts.length === 0) return;
+
+            console.log(`Found ${legacyPosts.length} legacy posts to fix. Attempting to claim ownership...`);
+
+            for (const post of legacyPosts) {
+                try {
+                    const postRef = doc(db, "posts", post.id);
+                    // Use setDoc with merge to ensure we don't overwrite other fields, 
+                    // acts as an update or create-if-missing (but doc exists)
+                    await setDoc(postRef, { userId: currentUser.uid }, { merge: true });
+                    console.log(`Successfully claimed ownership of post: ${post.id}`);
+                } catch (err) {
+                    console.error(`Failed to fix post ${post.id}. YOU MAY NEED TO MANUALLY UPDATE PERMISSIONS or DELETE VIA CONSOLE. Error:`, err);
+                }
+            }
+        };
+
+        fixLegacyPosts();
+    }, [userPosts, currentUser]);
 
     // Fetch User Profile Data (Avatar/Header) from Firestore
     useEffect(() => {
